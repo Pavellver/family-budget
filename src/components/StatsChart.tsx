@@ -2,22 +2,23 @@ import React from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area
+  AreaChart, Area,
+  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis // Новые импорты
 } from 'recharts';
 import { Transaction } from '../types';
 
-export type ChartType = 'pie' | 'bar' | 'area';
+// Добавили 'radar' в типы
+export type ChartType = 'pie' | 'bar' | 'area' | 'radar';
 
 interface StatsChartProps {
   transactions: Transaction[];
   type: ChartType;
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57', '#ff6b6b'];
 
 export const StatsChart: React.FC<StatsChartProps> = ({ transactions, type }) => {
   
-  // Data for Pie and Bar charts (Grouped by Category)
   const categoryData = React.useMemo(() => {
     const map = new Map<string, number>();
     transactions.forEach(t => {
@@ -28,14 +29,11 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, type }) =>
       .sort((a, b) => b.value - a.value);
   }, [transactions]);
 
-  // Data for Area chart (Grouped by Date)
   const timeData = React.useMemo(() => {
     const map = new Map<string, number>();
-    // Sort transactions by date first
     const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     sorted.forEach(t => {
-      // Use full date for granularity
       const dateStr = new Date(t.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
       map.set(dateStr, (map.get(dateStr) || 0) + t.amount);
     });
@@ -53,7 +51,7 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, type }) =>
   const formatCurrency = (value: number) => `${value.toLocaleString('ru-RU')} ₽`;
 
   return (
-    <div className="h-80 w-full bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col">
+    <div className="h-96 w-full bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col">
       <div className="flex-1 w-full min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           {type === 'pie' ? (
@@ -87,6 +85,15 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, type }) =>
                 ))}
               </Bar>
             </BarChart>
+          ) : type === 'radar' ? (
+            // НОВАЯ ДИАГРАММА - РАДАР
+            <RadarChart cx="50%" cy="50%" outerRadius="80%" data={categoryData}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false}/>
+              <Radar name="Расходы" dataKey="value" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
+              <Tooltip formatter={formatCurrency} />
+            </RadarChart>
           ) : (
             <AreaChart data={timeData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <defs>
