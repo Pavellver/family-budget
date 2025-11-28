@@ -14,14 +14,21 @@ export const saveTransactions = (transactions: Transaction[]) => {
 export const loadTransactions = (): Transaction[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    
+    const parsed = JSON.parse(data);
+    
+    // МИГРАЦИЯ: Если у старых записей нет типа, считаем их расходами
+    return parsed.map((t: any) => ({
+      ...t,
+      type: t.type || 'expense' 
+    }));
   } catch (error) {
     console.error('Load failed', error);
     return [];
   }
 };
 
-// --- JSON EXPORT/IMPORT ---
 export const exportData = (transactions: Transaction[]) => {
   const dataStr = JSON.stringify(transactions, null, 2);
   const blob = new Blob([dataStr], { type: "application/json" });
@@ -40,8 +47,16 @@ export const importData = (file: File): Promise<Transaction[]> => {
     reader.onload = (e) => {
       try {
         const result = JSON.parse(e.target?.result as string);
-        if (Array.isArray(result)) resolve(result);
-        else reject(new Error("Invalid format"));
+        if (Array.isArray(result)) {
+          // При импорте тоже проверяем тип
+          const cleanData = result.map((t: any) => ({
+            ...t,
+            type: t.type || 'expense'
+          }));
+          resolve(cleanData);
+        } else {
+          reject(new Error("Invalid format"));
+        }
       } catch (err) {
         reject(err);
       }
@@ -50,11 +65,9 @@ export const importData = (file: File): Promise<Transaction[]> => {
   });
 };
 
-// --- EXCEL EXPORT/IMPORT (НОВОЕ) ---
-
 export const exportToExcel = (transactions: Transaction[]) => {
-  // Подготовка данных (делаем красивые заголовки для Excel)
   const dataToExport = transactions.map(t => ({
+    'Тип': t.type === 'expense' ? 'Расход' : 'Доход', // Добавили колонку Тип
     'Дата': t.date,
     'Категория': t.category,
     'Сумма': t.amount,
@@ -64,11 +77,8 @@ export const exportToExcel = (transactions: Transaction[]) => {
 
   const worksheet = XLSX.utils.json_to_sheet(dataToExport);
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Расходы");
-  
-  // Настройка ширины колонок
-  worksheet['!cols'] = [{wch: 12}, {wch: 15}, {wch: 10}, {wch: 30}, {wch: 25}];
-
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Бюджет");
+  worksheet['!cols'] = [{wch: 10}, {wch: 12}, {wch: 15}, {wch: 10}, {wch: 30}, {wch: 25}];
   XLSX.writeFile(workbook, `budget_excel_${new Date().toISOString().split('T')[0]}.xlsx`);
 };
 
@@ -83,13 +93,14 @@ export const importFromExcel = (file: File): Promise<Transaction[]> => {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Превращаем Excel-строки обратно в формат приложения
         const parsedTransactions: Transaction[] = jsonData.map((row: any) => ({
-          id: row['ID (Не трогать)'] || crypto.randomUUID(), // Если ID нет, создадим новый
+          id: row['ID (Не трогать)'] || crypto.randomUUID(),
           date: row['Дата'] || new Date().toISOString().split('T')[0],
           amount: Number(row['Сумма']) || 0,
           category: row['Категория'] || 'Другое',
           description: row['Описание'] || '',
+          // Распознаем тип
+          type: (row['Тип'] === 'Доход') ? 'income' : 'expense', 
           createdAt: Date.now()
         }));
 

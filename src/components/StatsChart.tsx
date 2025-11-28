@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'; // Убрали useState, так как управление теперь снаружи
+import React, { useState, useMemo } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -7,19 +7,20 @@ import {
 import { Transaction, getGroupByCategory } from '../types';
 
 export type ChartType = 'pie' | 'bar' | 'area' | 'radar';
-export type GroupByOption = 'category' | 'group'; // Экспортируем тип для App.tsx
+type GroupByOption = 'category' | 'group';
 
 interface StatsChartProps {
   transactions: Transaction[];
-  type: ChartType;
   darkMode: boolean;
-  groupBy: GroupByOption; // Теперь принимаем это как пропс
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57', '#ff6b6b'];
 
-export const StatsChart: React.FC<StatsChartProps> = ({ transactions, type, darkMode, groupBy }) => {
+export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }) => {
+  const [type, setType] = useState<ChartType>('pie');
+  const [groupBy, setGroupBy] = useState<GroupByOption>('category');
   
+  // --- ДАННЫЕ ДЛЯ КРУГА, СТОЛБЦОВ, РАДАРА ---
   const chartData = useMemo(() => {
     const map = new Map<string, number>();
     transactions.forEach(t => {
@@ -31,15 +32,41 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, type, dark
       .sort((a, b) => b.value - a.value);
   }, [transactions, groupBy]);
 
-  const timeData = useMemo(() => {
-    const map = new Map<string, number>();
-    const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    sorted.forEach(t => {
+  // --- ДАННЫЕ ДЛЯ ГРАФИКА ВРЕМЕНИ (ИСПРАВЛЕНО) ---
+  const { timeData, dataKeys } = useMemo(() => {
+    const map = new Map<string, Record<string, number>>();
+    const allKeys = new Set<string>(); // Собираем все возможные категории/группы за этот период
+
+    // 1. Предварительная сортировка транзакций по дате
+    const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // 2. Сбор данных и ключей
+    sortedTransactions.forEach(t => {
       const dateStr = new Date(t.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-      map.set(dateStr, (map.get(dateStr) || 0) + t.amount);
+      const key = groupBy === 'category' ? t.category : getGroupByCategory(t.category);
+      
+      allKeys.add(key);
+
+      if (!map.has(dateStr)) {
+        map.set(dateStr, {});
+      }
+      const dayData = map.get(dateStr)!;
+      dayData[key] = (dayData[key] || 0) + t.amount;
     });
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
-  }, [transactions]);
+
+    // 3. Нормализация (Заполняем нулями пропуски)
+    // Это уберет "летающие" слои
+    const keysArray = Array.from(allKeys);
+    const normalizedData = Array.from(map.entries()).map(([name, values]) => {
+      const row: any = { name };
+      keysArray.forEach(k => {
+        row[k] = values[k] || 0; // Если в этот день категории не было, ставим 0
+      });
+      return row;
+    });
+
+    return { timeData: normalizedData, dataKeys: keysArray };
+  }, [transactions, groupBy]);
 
   if (transactions.length === 0) {
     return (
@@ -57,26 +84,54 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, type, dark
   const tooltipText = darkMode ? '#f3f4f6' : '#111827';
 
   return (
-    // Увеличили высоту до h-[450px] чтобы выровнять с левой колонкой
-    <div className={`h-[450px] w-full p-4 rounded-xl shadow-sm border flex flex-col ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
+    <div className={`h-[480px] w-full p-4 rounded-xl shadow-sm border flex flex-col ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
       
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className={`flex gap-1 p-1 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-100/50'}`}>
+          {['pie', 'bar', 'radar', 'area'].map(t => (
+            <button 
+              key={t} 
+              onClick={() => setType(t as ChartType)} 
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                type === t 
+                  ? (darkMode ? 'bg-blue-600 text-white shadow' : 'bg-blue-100 text-blue-700 shadow') 
+                  : (darkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100')
+              }`}
+            >
+              {t === 'pie' ? 'Круг' : t === 'bar' ? 'Столбцы' : t === 'radar' ? 'Радар' : 'График'}
+            </button>
+          ))}
+        </div>
+
+        <div className={`flex items-center rounded-lg p-1 border ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+           <button 
+             onClick={() => setGroupBy('group')}
+             className={`px-3 py-1 text-xs rounded-md transition-all ${groupBy === 'group' ? (darkMode ? 'bg-gray-700 text-white shadow' : 'bg-white text-blue-600 shadow') : (darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700')}`}
+           >
+             По Группам
+           </button>
+           <button 
+             onClick={() => setGroupBy('category')}
+             className={`px-3 py-1 text-xs rounded-md transition-all ${groupBy === 'category' ? (darkMode ? 'bg-gray-700 text-white shadow' : 'bg-white text-blue-600 shadow') : (darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700')}`}
+           >
+             Детально
+           </button>
+        </div>
+      </div>
+
       <div className="flex-1 w-full min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           {type === 'pie' ? (
             <PieChart>
               <Pie 
                 data={chartData} 
-                cx="50%" 
-                cy="50%" // Подняли чуть выше, чтобы легенда влезла снизу
-                innerRadius={80} 
-                outerRadius={130} 
-                paddingAngle={2} 
-                dataKey="value"
+                cx="50%" cy="45%" 
+                innerRadius={80} outerRadius={130} 
+                paddingAngle={2} dataKey="value"
               >
                 {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
               </Pie>
               <Tooltip formatter={formatCurrency} contentStyle={{ backgroundColor: tooltipBg, color: tooltipText, border: 'none' }} />
-              {/* Легенда снизу */}
               <Legend verticalAlign="bottom" align="center" height={36} />
             </PieChart>
           ) : type === 'bar' ? (
@@ -93,23 +148,32 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, type, dark
             <RadarChart cx="50%" cy="50%" outerRadius="70%" data={chartData}>
               <PolarGrid stroke={gridColor} />
               <PolarAngleAxis dataKey="name" tick={{ fontSize: 11, fill: axisColor }} />
-              <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false}/>
-              <Radar name="Расходы" dataKey="value" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
+              <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false} axisLine={false} />
+              <Radar name="Сумма" dataKey="value" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
               <Tooltip formatter={formatCurrency} contentStyle={{ backgroundColor: tooltipBg, color: tooltipText, border: 'none' }} />
             </RadarChart>
           ) : (
+            // СТЕКОВЫЙ ГРАФИК
             <AreaChart data={timeData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
               <XAxis dataKey="name" tick={{fontSize: 12, fill: axisColor}} minTickGap={30} />
               <YAxis tick={{fontSize: 12, fill: axisColor}} />
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <Tooltip formatter={formatCurrency} contentStyle={{ backgroundColor: tooltipBg, color: tooltipText, border: 'none' }} />
-              <Area type="monotone" dataKey="value" stroke="#8884d8" fillOpacity={1} fill="url(#colorValue)" />
+              <Legend verticalAlign="bottom" height={36}/>
+              
+              {/* РИСУЕМ СЛОИ */}
+              {dataKeys.map((key, index) => (
+                <Area 
+                  key={key}
+                  type="monotone" 
+                  dataKey={key} 
+                  stackId="1" 
+                  stroke={COLORS[index % COLORS.length]} 
+                  fill={COLORS[index % COLORS.length]} 
+                  fillOpacity={0.7} // Полупрозрачность
+                  connectNulls // Соединять точки (на всякий случай)
+                />
+              ))}
             </AreaChart>
           )}
         </ResponsiveContainer>
