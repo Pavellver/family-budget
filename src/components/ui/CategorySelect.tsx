@@ -43,7 +43,6 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({ value, onChange,
 
       {/* Список ГРУПП */}
       {isOpen && (
-        // ВАЖНО: Убрали overflow-hidden, чтобы подменю могло торчать вбок
         <div className={`absolute top-full left-0 w-full md:w-60 mt-1 rounded-lg shadow-xl border z-50 py-1 ${dropdownBg}`}>
           {Object.entries(groups).map(([group, items]) => (
             <div 
@@ -59,7 +58,8 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({ value, onChange,
 
               {/* Список ПОДКАТЕГОРИЙ (Справа) */}
               {hoveredGroup === group && (
-                <div className={`absolute top-0 left-full ml-1 w-48 rounded-lg shadow-xl border py-1 z-50 max-h-64 overflow-y-auto ${dropdownBg}`}>
+                // ИСПРАВЛЕНИЕ: Убрали overflow-y-auto и max-h-64, добавили min-w для красоты
+                <div className={`absolute top-0 left-full ml-1 w-48 rounded-lg shadow-xl border py-1 z-50 min-w-[12rem] ${dropdownBg}`}>
                   {(items as readonly string[]).map(cat => (
                     <div
                       key={cat}

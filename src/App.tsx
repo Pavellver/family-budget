@@ -3,6 +3,7 @@ import { Transaction, EXPENSE_GROUPS, INCOME_GROUPS, ALL_EXPENSE_CATS, ALL_INCOM
 import { saveTransactions, loadTransactions, exportData, importData, exportToExcel, importFromExcel } from './services/storageService';
 import { Button } from './components/ui/Button';
 import { StatsChart } from './components/StatsChart';
+import { AnalysisDashboard } from './components/AnalysisDashboard'; // Подключаем новый дашборд
 import { CategorySelect } from './components/ui/CategorySelect';
 
 // --- ИКОНКИ ---
@@ -27,7 +28,13 @@ const generateId = () => Date.now().toString(36) + Math.random().toString(36).su
 
 function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [darkMode, setDarkMode] = useState(false);
+  
+  // Тема из localStorage
+  const [darkMode, setDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme === 'dark';
+  });
+
   const [appMode, setAppMode] = useState<AppMode>('expenses');
   
   const currentCategoryGroups = appMode === 'income' ? INCOME_GROUPS : EXPENSE_GROUPS;
@@ -63,14 +70,12 @@ function App() {
   useEffect(() => {
     const data = loadTransactions();
     setTransactions(data);
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setDarkMode(true);
-    }
   }, []);
 
   useEffect(() => { saveTransactions(transactions); }, [transactions]);
 
   useEffect(() => {
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
     if (darkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }, [darkMode]);
@@ -84,6 +89,24 @@ function App() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // ФУНКЦИЯ ДЛЯ КНОПОК +/- 100
+  const adjustAmount = (delta: number) => {
+    const val = parseFloat(amount) || 0;
+    const newVal = Math.max(0, val + delta);
+    setAmount(Number(newVal.toFixed(2)).toString());
+  };
+
+  const handleAmountKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      adjustAmount(100);
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      adjustAmount(-100);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,10 +292,10 @@ function App() {
         <div className={`p-4 border-b animate-in slide-in-from-top-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
           <div className="max-w-5xl mx-auto flex flex-wrap gap-4 items-center">
             <div className="flex gap-2">
-              <Button onClick={() => exportData(transactions)} variant="outline" className={`text-xs ${darkMode ? 'text-gray-200 border-gray-600 hover:bg-gray-700' : ''}`}><DownloadIcon /> JSON</Button>
+              <Button onClick={() => exportData(transactions)} variant="outline" className={`text-xs text-purple-600 border-purple-200 ${darkMode ? 'bg-purple-900/20 border-purple-800 text-purple-400' : ''}`}><DownloadIcon /> JSON</Button>
               <div className="relative">
                 <input type="file" accept=".json" onChange={(e) => { const f = e.target.files?.[0]; if(f) importData(f).then(d => { if(confirm('Заменить?')) setTransactions(d); }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
-                <Button variant="outline" className={`text-xs ${darkMode ? 'text-gray-200 border-gray-600 hover:bg-gray-700' : ''}`}><UploadIcon /> JSON</Button>
+                <Button variant="outline" className={`text-xs text-purple-600 border-purple-200 ${darkMode ? 'bg-purple-900/20 border-purple-800 text-purple-400' : ''}`}><UploadIcon /> JSON</Button>
               </div>
             </div>
             <div className="flex gap-2 border-l pl-4 border-gray-400/30">
@@ -293,16 +316,13 @@ function App() {
     return (
       <div className={`min-h-screen transition-colors duration-300 font-sans ${darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
         {headerContent}
-        <div className="flex flex-col items-center justify-center h-[80vh] text-center p-4">
-          <div className="text-6xl mb-4">📊</div>
-          <h2 className="text-2xl font-bold mb-2">Анализ Бюджета</h2>
-          <p className="text-gray-500 max-w-md">Здесь будут сводные графики доходов и расходов.</p>
-          <div className={`mt-4 p-4 rounded-lg border border-dashed ${darkMode ? 'border-gray-700' : 'border-gray-400'} opacity-50`}>
-            <p className="mb-2 text-green-500">Доходы: +{transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0).toLocaleString()} ₽</p>
-            <p className="mb-2 text-blue-500">Расходы: -{transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0).toLocaleString()} ₽</p>
-            <p className="font-bold border-t pt-2 mt-2">Итого: {(transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0) - transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)).toLocaleString()} ₽</p>
+        <main className="max-w-5xl mx-auto px-4 py-6">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold">Аналитический обзор</h2>
+            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Стратегические показатели и тренды вашего бюджета</p>
           </div>
-        </div>
+          <AnalysisDashboard transactions={transactions} darkMode={darkMode} />
+        </main>
       </div>
     );
   }
@@ -323,17 +343,39 @@ function App() {
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
             <div className="lg:col-span-2">
               <label className="block text-xs font-medium opacity-70 mb-1">Сумма</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                step="100"
-                min="0"
-                required
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className={`w-full p-2 border rounded-lg focus:ring-2 outline-none shadow-sm ${darkMode ? `bg-gray-700 border-gray-600 text-white focus:ring-${themeColor}-500` : `bg-white border-gray-300 focus:ring-${themeColor}-200`}`}
-                placeholder="0"
-              />
+              
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  required
+                  value={amount}
+                  onKeyDown={handleAmountKeyDown}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className={`w-full p-2 pr-6 border rounded-lg focus:ring-2 outline-none shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${darkMode ? `bg-gray-700 border-gray-600 text-white focus:ring-${themeColor}-500` : `bg-white border-gray-300 focus:ring-${themeColor}-200`}`}
+                  placeholder="0"
+                />
+                
+                <div className={`absolute right-0 top-0 bottom-0 flex flex-col border-l w-6 ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}>
+                   <button 
+                     type="button" 
+                     onClick={() => adjustAmount(100)} 
+                     className={`flex-1 flex items-center justify-center text-[10px] rounded-tr-lg hover:bg-opacity-20 transition-colors ${darkMode ? 'hover:bg-white text-gray-400' : 'hover:bg-black text-gray-500'}`}
+                   >
+                     ▲
+                   </button>
+                   <button 
+                     type="button" 
+                     onClick={() => adjustAmount(-100)} 
+                     className={`flex-1 flex items-center justify-center text-[10px] rounded-br-lg border-t hover:bg-opacity-20 transition-colors ${darkMode ? 'border-gray-600 hover:bg-white text-gray-400' : 'border-gray-300 hover:bg-black text-gray-500'}`}
+                   >
+                     ▼
+                   </button>
+                </div>
+              </div>
+
             </div>
             <div className="lg:col-span-2">
               <label className="block text-xs font-medium opacity-70 mb-1">Дата</label>
@@ -407,7 +449,7 @@ function App() {
           </div>
 
           <div className="md:col-span-2 space-y-4">
-             {/* ВСТАВЛЯЕМ ГРАФИК БЕЗ ЛИШНИХ ПРОПСОВ */}
+             {/* ВСТАВЛЯЕМ ГРАФИК */}
              <StatsChart transactions={filteredData} darkMode={darkMode} />
           </div>
         </div>
