@@ -3,7 +3,7 @@ import { Transaction, EXPENSE_GROUPS, INCOME_GROUPS, ALL_EXPENSE_CATS, ALL_INCOM
 import { saveTransactions, loadTransactions, exportData, importData, exportToExcel, importFromExcel } from './services/storageService';
 import { Button } from './components/ui/Button';
 import { StatsChart } from './components/StatsChart';
-import { AnalysisDashboard } from './components/AnalysisDashboard'; // Подключаем новый дашборд
+import { AnalysisDashboard } from './components/AnalysisDashboard';
 import { CategorySelect } from './components/ui/CategorySelect';
 
 // --- ИКОНКИ ---
@@ -29,7 +29,6 @@ const generateId = () => Date.now().toString(36) + Math.random().toString(36).su
 function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   
-  // Тема из localStorage
   const [darkMode, setDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
     return savedTheme === 'dark';
@@ -90,7 +89,6 @@ function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ФУНКЦИЯ ДЛЯ КНОПОК +/- 100
   const adjustAmount = (delta: number) => {
     const val = parseFloat(amount) || 0;
     const newVal = Math.max(0, val + delta);
@@ -217,6 +215,7 @@ function App() {
       if (periodMode !== 'all') {
         if (t.date < startStr || t.date > endStr) return false;
       }
+      
       if (!selectedCategories.has(t.category)) return false;
       
       if (searchQuery) {
@@ -244,7 +243,6 @@ function App() {
 
   const totalPages = itemsPerPage === -1 ? 1 : Math.ceil(filteredData.length / itemsPerPage);
   const totalAmount = useMemo(() => filteredData.reduce((sum, t) => sum + t.amount, 0), [filteredData]);
-  const globalTotal = useMemo(() => transactions.reduce((sum, t) => sum + t.amount, 0), [transactions]);
 
   const getPeriodLabel = () => {
     if (periodMode === 'currentMonth') return 'Текущий месяц';
@@ -449,7 +447,7 @@ function App() {
           </div>
 
           <div className="md:col-span-2 space-y-4">
-             {/* ВСТАВЛЯЕМ ГРАФИК */}
+             {/* ВСТАВЛЯЕМ ГРАФИК БЕЗ ЛИШНИХ ПРОПСОВ */}
              <StatsChart transactions={filteredData} darkMode={darkMode} />
           </div>
         </div>
