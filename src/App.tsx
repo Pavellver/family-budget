@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Transaction, EXPENSE_GROUPS, INCOME_GROUPS, ALL_EXPENSE_CATS, ALL_INCOME_CATS, TransactionType } from './types';
-import { saveTransactions, loadTransactions, exportData, importData, exportToExcel, importFromExcel } from './services/storageService';
+import { saveTransactions, loadTransactions, exportData, importData, exportToExcel, importFromExcel, clearData } from './services/storageService';
 import { Button } from './components/ui/Button';
 import { StatsChart } from './components/StatsChart';
 import { AnalysisDashboard } from './components/AnalysisDashboard';
 import { CategorySelect } from './components/ui/CategorySelect';
 
-// --- ИКОНКИ ---
+const APP_VERSION = '0.1.0';
+
+// Иконки
 const TrashIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>);
 const EditIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>);
 const MoonIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>);
@@ -18,6 +20,9 @@ const DownloadIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="18" h
 const UploadIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>);
 const ExcelIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="green" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>);
 const SearchIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>);
+const Trash2Icon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>);
+const FirstPageIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>);
+const LastPageIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>);
 
 type PeriodMode = 'currentMonth' | 'prevMonth' | 'last30days' | 'thisYear' | 'all' | 'custom';
 type SortKey = 'date' | 'amount';
@@ -27,7 +32,11 @@ type AppMode = 'expenses' | 'income' | 'analysis';
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
 function App() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  // ВАЖНОЕ ИСПРАВЛЕНИЕ: Загружаем данные СРАЗУ при инициализации, а не в useEffect
+  // Это предотвращает перезапись данных пустым массивом при старте
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    return loadTransactions();
+  });
   
   const [darkMode, setDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -47,6 +56,7 @@ function App() {
   const formRef = useRef<HTMLElement>(null);
 
   const [showSettings, setShowSettings] = useState(false);
+  const [showClearMenu, setShowClearMenu] = useState(false);
   const [periodMode, setPeriodMode] = useState<PeriodMode>('currentMonth');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -66,10 +76,7 @@ function App() {
     setSelectedCategories(new Set(appMode === 'income' ? ALL_INCOME_CATS : ALL_EXPENSE_CATS));
   }, [appMode]);
 
-  useEffect(() => {
-    const data = loadTransactions();
-    setTransactions(data);
-  }, []);
+  // УБРАЛИ ЛИШНИЙ useEffect с loadTransactions(), так как теперь это в useState
 
   useEffect(() => { saveTransactions(transactions); }, [transactions]);
 
@@ -103,6 +110,18 @@ function App() {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       adjustAmount(-100);
+    }
+  };
+
+  const handleClearData = (mode: 'all' | 'income' | 'expenses') => {
+    const msg = mode === 'all' ? 'Удалить ВСЕ данные?' : mode === 'income' ? 'Удалить все ДОХОДЫ?' : 'Удалить все РАСХОДЫ?';
+    if (confirm(msg)) {
+      if (confirm('Точно? Это действие нельзя отменить.')) {
+        const newData = clearData(mode);
+        setTransactions(newData);
+        setShowSettings(false);
+        setShowClearMenu(false);
+      }
     }
   };
 
@@ -288,22 +307,40 @@ function App() {
       
       {showSettings && (
         <div className={`p-4 border-b animate-in slide-in-from-top-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
-          <div className="max-w-5xl mx-auto flex flex-wrap gap-4 items-center">
-            <div className="flex gap-2">
-              <Button onClick={() => exportData(transactions)} variant="outline" className={`text-xs text-purple-600 border-purple-200 ${darkMode ? 'bg-purple-900/20 border-purple-800 text-purple-400' : ''}`}><DownloadIcon /> JSON</Button>
-              <div className="relative">
-                <input type="file" accept=".json" onChange={(e) => { const f = e.target.files?.[0]; if(f) importData(f).then(d => { if(confirm('Заменить?')) setTransactions(d); }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
-                <Button variant="outline" className={`text-xs text-purple-600 border-purple-200 ${darkMode ? 'bg-purple-900/20 border-purple-800 text-purple-400' : ''}`}><UploadIcon /> JSON</Button>
+          <div className="max-w-5xl mx-auto flex flex-col gap-4">
+            
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex gap-2">
+                <Button onClick={() => exportData(transactions, APP_VERSION)} variant="outline" className={`text-xs text-purple-600 border-purple-200 ${darkMode ? 'bg-purple-900/20 border-purple-800 text-purple-400' : ''}`}><DownloadIcon /> JSON</Button>
+                <div className="relative">
+                  <input type="file" accept=".json" onChange={(e) => { const f = e.target.files?.[0]; if(f) importData(f).then(d => { if(confirm('Заменить текущие данные?')) setTransactions(d); }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+                  <Button variant="outline" className={`text-xs text-purple-600 border-purple-200 ${darkMode ? 'bg-purple-900/20 border-purple-800 text-purple-400' : ''}`}><UploadIcon /> JSON</Button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 border-l pl-4 border-gray-400/30">
+                <Button onClick={() => exportToExcel(transactions)} variant="outline" className={`text-xs text-green-600 border-green-200 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><ExcelIcon /> Excel Скачать</Button>
+                <div className="relative">
+                  <input type="file" accept=".xlsx" onChange={(e) => { const f = e.target.files?.[0]; if(f) importFromExcel(f).then(d => { if(confirm('Заменить текущие данные?')) setTransactions(d); }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+                  <Button variant="outline" className={`text-xs text-green-600 border-green-200 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><UploadIcon /> Excel Загрузить</Button>
+                </div>
+              </div>
+
+              <div className="ml-auto">
+                 <button onClick={() => setShowClearMenu(!showClearMenu)} className="text-xs text-red-500 hover:underline">Очистка данных</button>
               </div>
             </div>
-            <div className="flex gap-2 border-l pl-4 border-gray-400/30">
-              <Button onClick={() => exportToExcel(transactions)} variant="outline" className={`text-xs text-green-600 border-green-200 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><ExcelIcon /> Excel Скачать</Button>
-              <div className="relative">
-                <input type="file" accept=".xlsx" onChange={(e) => { const f = e.target.files?.[0]; if(f) importFromExcel(f).then(d => { if(confirm('Заменить?')) setTransactions(d); }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
-                <Button variant="outline" className={`text-xs text-green-600 border-green-200 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><UploadIcon /> Excel Загрузить</Button>
+
+            {showClearMenu && (
+              <div className={`p-3 rounded border border-red-200 flex flex-wrap gap-2 items-center ${darkMode ? 'bg-red-900/20' : 'bg-red-50'}`}>
+                <span className="text-xs font-bold text-red-500 uppercase mr-2">Удаление:</span>
+                <Button onClick={() => handleClearData('income')} variant="danger" className="text-xs px-2 py-1 h-8">Только Доходы</Button>
+                <Button onClick={() => handleClearData('expenses')} variant="danger" className="text-xs px-2 py-1 h-8">Только Расходы</Button>
+                <Button onClick={() => handleClearData('all')} variant="danger" className="text-xs px-2 py-1 h-8 bg-red-700 hover:bg-red-800"><Trash2Icon /> Удалить ВСЁ</Button>
               </div>
-            </div>
-            <div className="ml-auto text-sm opacity-70 hidden sm:block">Всего записей (всех типов): {transactions.length}</div>
+            )}
+            
+            <div className="text-xs opacity-50 text-right">Всего записей: {transactions.length} | v{APP_VERSION}</div>
           </div>
         </div>
       )}
@@ -447,7 +484,6 @@ function App() {
           </div>
 
           <div className="md:col-span-2 space-y-4">
-             {/* ВСТАВЛЯЕМ ГРАФИК БЕЗ ЛИШНИХ ПРОПСОВ */}
              <StatsChart transactions={filteredData} darkMode={darkMode} />
           </div>
         </div>
@@ -510,7 +546,6 @@ function App() {
                     <tr key={t.id} className={`transition-colors group ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${editingId === t.id ? (darkMode ? 'bg-blue-900/30' : 'bg-blue-50') : ''}`}>
                       <td className="px-4 py-3 font-medium opacity-90">{new Date(t.date).toLocaleDateString('ru-RU')}</td>
                       <td className="px-4 py-3">
-                        {/* ЦВЕТ БЕЙДЖА КАТЕГОРИИ */}
                         <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
                           appMode === 'income'
                             ? (darkMode ? 'bg-green-900/50 text-green-200' : 'bg-green-50 text-green-700')
@@ -536,9 +571,11 @@ function App() {
 
           {itemsPerPage !== -1 && totalPages > 1 && (
             <div className={`p-3 flex justify-center gap-2 border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 rounded border disabled:opacity-30">Назад</button>
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)} className="px-2 py-1 rounded border disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><FirstPageIcon /></button>
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 rounded border disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Назад</button>
               <span className="px-2 py-1 opacity-70">Стр {currentPage} из {totalPages}</span>
-              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 rounded border disabled:opacity-30">Вперед</button>
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 rounded border disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Вперед</button>
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)} className="px-2 py-1 rounded border disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><LastPageIcon /></button>
             </div>
           )}
         </section>

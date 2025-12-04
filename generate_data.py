@@ -9,7 +9,7 @@ YEAR = 2025
 COUNT_EXPENSE = 900
 COUNT_INCOME = 100
 
-# --- КАТЕГОРИИ ИЗ ТВОЕГО TYPES.TS ---
+# --- КАТЕГОРИИ ИЗ TYPES.TS ---
 EXPENSE_CATS = [
     # Фикс
     "Коммуналка", "ЭЭ", "Вода", "Газ", "Гараж", "Телефон", "Интернет", "Авто",
@@ -30,7 +30,7 @@ INCOME_CATS = [
     "Подарки", "Продажа вещей", "Возврат долга", "Другое"
 ]
 
-# --- ГЕНЕРАЦИЯ ---
+# ГЕНЕРАЦИЯ
 data = []
 start_date = datetime(YEAR, 1, 1)
 end_date = datetime(YEAR, 12, 31)
@@ -39,7 +39,7 @@ days_in_year = (end_date - start_date).days
 print(f"Генерируем данные за {YEAR} год...")
 print(f"Расходов: {COUNT_EXPENSE}, Доходов: {COUNT_INCOME}")
 
-# 1. ГЕНЕРАЦИЯ РАСХОДОВ
+# ГЕНЕРАЦИЯ РАСХОДОВ
 for _ in range(COUNT_EXPENSE):
     random_days = random.randint(0, days_in_year)
     date_str = (start_date + timedelta(days=random_days)).strftime('%Y-%m-%d')
@@ -56,7 +56,7 @@ for _ in range(COUNT_EXPENSE):
     else:
         amount = random.randint(200, 3000)
 
-    # Округляем
+    # Округление
     if random.random() > 0.3: amount = round(amount / 100) * 100
 
     data.append({
@@ -68,7 +68,7 @@ for _ in range(COUNT_EXPENSE):
         'ID (Не трогать)': str(uuid.uuid4())
     })
 
-# 2. ГЕНЕРАЦИЯ ДОХОДОВ
+# ГЕНЕРАЦИЯ ДОХОДОВ
 for _ in range(COUNT_INCOME):
     random_days = random.randint(0, days_in_year)
     date_str = (start_date + timedelta(days=random_days)).strftime('%Y-%m-%d')
