@@ -380,9 +380,6 @@ function App() {
                 >
                   Загрузить демо-данные
                 </Button>
-                <span className={`text-[11px] max-w-52 leading-tight ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Годовой пресет: есть месяцы с минусом, но в целом доходы выше расходов.
-                </span>
               </div>
 
               <div className="ml-auto w-full sm:w-auto">
@@ -399,18 +396,6 @@ function App() {
               </div>
             )}
 
-            <div className={`p-3 rounded border ${darkMode ? 'border-gray-700 bg-gray-900/40' : 'border-gray-200 bg-white/80'}`}>
-              <h4 className={`text-sm font-semibold mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Помощь</h4>
-              <ul className={`text-xs leading-5 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                <li>Режимы: Расходы, Доходы и Анализ с KPI и прогнозом на 6 месяцев.</li>
-                <li>Фильтры: период, категории, поиск по описанию, сортировка и пагинация.</li>
-                <li>Данные: экспорт/импорт JSON и Excel, при импорте можно заменить или дополнить текущие записи.</li>
-                <li>Для быстрого старта есть годовой демо-пресет.</li>
-                <li>Темы: светлая и тёмная, переключаются в шапке.</li>
-                <li>Хранение: все записи лежат локально в браузере (без сервера).</li>
-              </ul>
-            </div>
-            
             <div className="text-xs opacity-50 text-right">Всего записей: {transactions.length} | v{APP_VERSION}</div>
           </div>
         </div>
