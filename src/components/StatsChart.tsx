@@ -5,6 +5,7 @@ import {
   AreaChart, Area, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 import { Transaction, getGroupByCategory } from '../types';
+import { parseDateInput } from '../utils/date';
 
 export type ChartType = 'pie' | 'bar' | 'area' | 'radar';
 type GroupByOption = 'category' | 'group';
@@ -19,8 +20,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }) => {
   const [type, setType] = useState<ChartType>('pie');
   const [groupBy, setGroupBy] = useState<GroupByOption>('category');
-  
-  // --- ДАННЫЕ ДЛЯ КРУГА, СТОЛБЦОВ, РАДАРА ---
+
   const chartData = useMemo(() => {
     const map = new Map<string, number>();
     transactions.forEach(t => {
@@ -32,17 +32,14 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }
       .sort((a, b) => b.value - a.value);
   }, [transactions, groupBy]);
 
-  // --- ДАННЫЕ ДЛЯ ГРАФИКА ВРЕМЕНИ (ИСПРАВЛЕНО) ---
   const { timeData, dataKeys } = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
-    const allKeys = new Set<string>(); // Собираем все возможные категории/группы за этот период
+    const allKeys = new Set<string>();
 
-    // 1. Предварительная сортировка транзакций по дате
-    const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
-    // 2. Сбор данных и ключей
+    const sortedTransactions = [...transactions].sort((a, b) => parseDateInput(a.date).getTime() - parseDateInput(b.date).getTime());
+
     sortedTransactions.forEach(t => {
-      const dateStr = new Date(t.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+      const dateStr = parseDateInput(t.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
       const key = groupBy === 'category' ? t.category : getGroupByCategory(t.category);
       
       allKeys.add(key);
@@ -54,13 +51,11 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }
       dayData[key] = (dayData[key] || 0) + t.amount;
     });
 
-    // 3. Нормализация (Заполняем нулями пропуски)
-    // Это уберет "летающие" слои
     const keysArray = Array.from(allKeys);
     const normalizedData = Array.from(map.entries()).map(([name, values]) => {
       const row: any = { name };
       keysArray.forEach(k => {
-        row[k] = values[k] || 0; // Если в этот день категории не было, ставим 0
+        row[k] = values[k] || 0;
       });
       return row;
     });
@@ -153,7 +148,6 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }
               <Tooltip formatter={formatCurrency} contentStyle={{ backgroundColor: tooltipBg, color: tooltipText, border: 'none' }} />
             </RadarChart>
           ) : (
-            // СТЕКОВЫЙ ГРАФИК
             <AreaChart data={timeData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <XAxis dataKey="name" tick={{fontSize: 12, fill: axisColor}} minTickGap={30} />
               <YAxis tick={{fontSize: 12, fill: axisColor}} />
@@ -161,7 +155,6 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }
               <Tooltip formatter={formatCurrency} contentStyle={{ backgroundColor: tooltipBg, color: tooltipText, border: 'none' }} />
               <Legend verticalAlign="bottom" height={36}/>
               
-              {/* РИСУЕМ СЛОИ */}
               {dataKeys.map((key, index) => (
                 <Area 
                   key={key}
@@ -170,8 +163,8 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }
                   stackId="1" 
                   stroke={COLORS[index % COLORS.length]} 
                   fill={COLORS[index % COLORS.length]} 
-                  fillOpacity={0.7} // Полупрозрачность
-                  connectNulls // Соединять точки (на всякий случай)
+                  fillOpacity={0.7}
+                  connectNulls
                 />
               ))}
             </AreaChart>

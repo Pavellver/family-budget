@@ -35,13 +35,11 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({ value, onChange,
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
-      {/* Кнопка */}
       <div onClick={() => setIsOpen(!isOpen)} className={baseStyles}>
         <span className="truncate mr-2">{value || "Выберите категорию"}</span>
         <svg className={`w-4 h-4 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
       </div>
 
-      {/* Список ГРУПП */}
       {isOpen && (
         <div className={`absolute top-full left-0 w-full md:w-60 mt-1 rounded-lg shadow-xl border z-50 py-1 ${dropdownBg}`}>
           {Object.entries(groups).map(([group, items]) => (
@@ -56,9 +54,7 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({ value, onChange,
                 <svg className="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
               </div>
 
-              {/* Список ПОДКАТЕГОРИЙ (Справа) */}
               {hoveredGroup === group && (
-                // ИСПРАВЛЕНИЕ: Убрали overflow-y-auto и max-h-64, добавили min-w для красоты
                 <div className={`absolute top-0 left-full ml-1 w-48 rounded-lg shadow-xl border py-1 z-50 min-w-[12rem] ${dropdownBg}`}>
                   {(items as readonly string[]).map(cat => (
                     <div

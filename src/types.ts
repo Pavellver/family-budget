@@ -7,10 +7,9 @@ export interface Transaction {
   category: string;
   description: string;
   createdAt: number;
-  type: TransactionType; // Новое поле
+  type: TransactionType;
 }
 
-// --- РАСХОДЫ ---
 export const EXPENSE_GROUPS = {
   "Фикс": [
     "Коммуналка", "ЭЭ", "Вода", "Газ", 
@@ -27,7 +26,6 @@ export const EXPENSE_GROUPS = {
   ]
 } as const;
 
-// --- ДОХОДЫ (НОВОЕ) ---
 export const INCOME_GROUPS = {
   "Активный": [
     "Зарплата", "Аванс", "Бонус", "Премия", "Подработка"
@@ -40,17 +38,13 @@ export const INCOME_GROUPS = {
   ]
 } as const;
 
-// Собираем всё вместе для типизации
 export const ALL_EXPENSE_CATS = Object.values(EXPENSE_GROUPS).flat();
 export const ALL_INCOME_CATS = Object.values(INCOME_GROUPS).flat();
 
-// Хелпер теперь ищет везде
 export const getGroupByCategory = (cat: string): string => {
-  // Ищем в расходах
   for (const [group, items] of Object.entries(EXPENSE_GROUPS)) {
     if ((items as readonly string[]).includes(cat)) return group;
   }
-  // Ищем в доходах
   for (const [group, items] of Object.entries(INCOME_GROUPS)) {
     if ((items as readonly string[]).includes(cat)) return group;
   }

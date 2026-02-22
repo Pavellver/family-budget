@@ -5,6 +5,8 @@ import { Button } from './components/ui/Button';
 import { StatsChart } from './components/StatsChart';
 import { AnalysisDashboard } from './components/AnalysisDashboard';
 import { CategorySelect } from './components/ui/CategorySelect';
+import { createPresetTransactions } from './data/presetTransactions';
+import { getCurrentMonthDateRange, getPreviousMonthDateRange, getTodayDateInput, parseDateInput, shiftDays, toDateInputValue } from './utils/date';
 
 const APP_VERSION = '0.1.0';
 
@@ -29,14 +31,26 @@ type SortKey = 'date' | 'amount';
 type SortDirection = 'asc' | 'desc';
 type AppMode = 'expenses' | 'income' | 'analysis';
 
-const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
+const generateId = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+const QUICK_AMOUNT_STEPS = [100, 500, 1000];
+const PERIOD_OPTIONS: Array<{ mode: Exclude<PeriodMode, 'custom'>; label: string }> = [
+  { mode: 'currentMonth', label: 'Текущий месяц' },
+  { mode: 'prevMonth', label: 'Прошлый месяц' },
+  { mode: 'last30days', label: '30 дней' },
+  { mode: 'thisYear', label: 'Этот год' },
+  { mode: 'all', label: 'Всё время' },
+];
+const PERIOD_LABELS: Record<PeriodMode, string> = {
+  currentMonth: 'Текущий месяц',
+  prevMonth: 'Прошлый месяц',
+  last30days: 'Последние 30 дней',
+  thisYear: 'Этот год',
+  all: 'Все время',
+  custom: 'Свой период',
+};
 
 function App() {
-  // ВАЖНОЕ ИСПРАВЛЕНИЕ: Загружаем данные СРАЗУ при инициализации, а не в useEffect
-  // Это предотвращает перезапись данных пустым массивом при старте
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    return loadTransactions();
-  });
+  const [transactions, setTransactions] = useState<Transaction[]>(() => loadTransactions());
   
   const [darkMode, setDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -49,7 +63,7 @@ function App() {
   const currentAllCategories = appMode === 'income' ? ALL_INCOME_CATS : ALL_EXPENSE_CATS;
 
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getTodayDateInput());
   const [category, setCategory] = useState<string>('');
   const [description, setDescription] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -75,8 +89,6 @@ function App() {
     setCategory(appMode === 'income' ? INCOME_GROUPS["Активный"][0] : EXPENSE_GROUPS["Фикс"][0]);
     setSelectedCategories(new Set(appMode === 'income' ? ALL_INCOME_CATS : ALL_EXPENSE_CATS));
   }, [appMode]);
-
-  // УБРАЛИ ЛИШНИЙ useEffect с loadTransactions(), так как теперь это в useState
 
   useEffect(() => { saveTransactions(transactions); }, [transactions]);
 
@@ -129,7 +141,7 @@ function App() {
     e.preventDefault();
     if (!amount || !date || !category) return;
 
-    const year = new Date(date).getFullYear();
+    const year = parseDateInput(date).getFullYear();
     if (year < 2000 || year > 2099) {
       alert("Пожалуйста, укажите реальный год (2000 - 2099)");
       return;
@@ -180,7 +192,7 @@ function App() {
     setEditingId(null);
     setAmount('');
     setDescription('');
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(getTodayDateInput());
   };
 
   const handleDelete = (id: string) => {
@@ -202,17 +214,14 @@ function App() {
 
     switch (periodMode) {
       case 'currentMonth':
-        startStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-        endStr = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+        ({ start: startStr, end: endStr } = getCurrentMonthDateRange(now));
         break;
       case 'prevMonth':
-        startStr = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-        endStr = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+        ({ start: startStr, end: endStr } = getPreviousMonthDateRange(now));
         break;
       case 'last30days':
-        const d = new Date(); d.setDate(d.getDate() - 30);
-        startStr = d.toISOString().split('T')[0];
-        endStr = now.toISOString().split('T')[0];
+        startStr = toDateInputValue(shiftDays(now, -30));
+        endStr = toDateInputValue(now);
         break;
       case 'thisYear':
         startStr = `${now.getFullYear()}-01-01`;
@@ -246,8 +255,8 @@ function App() {
     });
 
     return filtered.sort((a, b) => {
-      let valA = sortKey === 'amount' ? a.amount : new Date(a.date).getTime();
-      let valB = sortKey === 'amount' ? b.amount : new Date(b.date).getTime();
+      let valA = sortKey === 'amount' ? a.amount : parseDateInput(a.date).getTime();
+      let valB = sortKey === 'amount' ? b.amount : parseDateInput(b.date).getTime();
       if (valA < valB) return sortDir === 'asc' ? -1 : 1;
       if (valA > valB) return sortDir === 'asc' ? 1 : -1;
       return 0;
@@ -263,15 +272,7 @@ function App() {
   const totalPages = itemsPerPage === -1 ? 1 : Math.ceil(filteredData.length / itemsPerPage);
   const totalAmount = useMemo(() => filteredData.reduce((sum, t) => sum + t.amount, 0), [filteredData]);
 
-  const getPeriodLabel = () => {
-    if (periodMode === 'currentMonth') return 'Текущий месяц';
-    if (periodMode === 'prevMonth') return 'Прошлый месяц';
-    if (periodMode === 'last30days') return 'Последние 30 дней';
-    if (periodMode === 'thisYear') return 'Этот год';
-    if (periodMode === 'all') return 'Все время';
-    if (periodMode === 'custom') return 'Свой период';
-    return 'Период';
-  };
+  const getPeriodLabel = () => PERIOD_LABELS[periodMode];
 
   const toggleAllCategories = () => {
     if (selectedCategories.size === currentAllCategories.length) setSelectedCategories(new Set());
@@ -285,23 +286,37 @@ function App() {
     setSelectedCategories(newSet);
   };
 
+  const handleLoadPresetData = () => {
+    const message = transactions.length
+      ? 'Загрузить демо-данные и заменить текущие записи?'
+      : 'Загрузить демо-данные?';
+    if (!confirm(message)) return;
+    setTransactions(createPresetTransactions());
+    setShowSettings(false);
+    setShowClearMenu(false);
+    setEditingId(null);
+    setAmount('');
+    setDescription('');
+    setDate(getTodayDateInput());
+  };
+
   const headerContent = (
     <header className={`sticky top-0 z-20 shadow-sm transition-colors duration-300 ${darkMode ? 'bg-gray-800 border-b border-gray-700' : 'bg-white'}`}>
-      <div className="max-w-5xl mx-auto px-4 py-4 flex flex-wrap gap-4 justify-between items-center">
+      <div className="max-w-5xl mx-auto px-4 py-4 flex flex-wrap gap-3 justify-between items-center">
         <div>
           <h1 className="text-xl font-bold">Семейный Бюджет</h1>
           <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Контроль финансов</p>
         </div>
         
-        <div className="flex gap-3 items-center">
-            <div className={`flex rounded-lg p-1 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-              <button onClick={() => setAppMode('expenses')} className={`px-3 py-1 text-sm rounded-md transition-all ${appMode === 'expenses' ? 'bg-white text-blue-600 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}>Расходы</button>
-              <button onClick={() => setAppMode('income')} className={`px-3 py-1 text-sm rounded-md transition-all ${appMode === 'income' ? 'bg-white text-green-600 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}>Доходы</button>
-              <button onClick={() => setAppMode('analysis')} className={`px-3 py-1 text-sm rounded-md transition-all ${appMode === 'analysis' ? 'bg-white text-purple-600 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}>Анализ</button>
+        <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
+            <div className={`flex w-full sm:w-auto rounded-lg p-1 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+              <button onClick={() => setAppMode('expenses')} className={`flex-1 sm:flex-none px-3 py-2 text-xs sm:text-sm rounded-md transition-all ${appMode === 'expenses' ? 'bg-white text-blue-600 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}>Расходы</button>
+              <button onClick={() => setAppMode('income')} className={`flex-1 sm:flex-none px-3 py-2 text-xs sm:text-sm rounded-md transition-all ${appMode === 'income' ? 'bg-white text-green-600 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}>Доходы</button>
+              <button onClick={() => setAppMode('analysis')} className={`flex-1 sm:flex-none px-3 py-2 text-xs sm:text-sm rounded-md transition-all ${appMode === 'analysis' ? 'bg-white text-purple-600 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}>Анализ</button>
             </div>
 
-          <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-full transition-colors ${darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-100 text-gray-600'}`}>{darkMode ? <SunIcon /> : <MoonIcon />}</button>
-          <button onClick={() => setShowSettings(!showSettings)} className={`px-3 py-1 text-sm rounded-lg border transition-colors ${darkMode ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>Меню</button>
+          <button onClick={() => setDarkMode(!darkMode)} className={`h-10 w-10 flex items-center justify-center rounded-full transition-colors ${darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-100 text-gray-600'}`}>{darkMode ? <SunIcon /> : <MoonIcon />}</button>
+          <button onClick={() => setShowSettings(!showSettings)} className={`h-10 px-3 text-sm rounded-lg border transition-colors ${darkMode ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>Меню</button>
         </div>
       </div>
       
@@ -309,24 +324,53 @@ function App() {
         <div className={`p-4 border-b animate-in slide-in-from-top-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
           <div className="max-w-5xl mx-auto flex flex-col gap-4">
             
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex gap-2">
                 <Button onClick={() => exportData(transactions, APP_VERSION)} variant="outline" className={`text-xs text-purple-600 border-purple-200 ${darkMode ? 'bg-purple-900/20 border-purple-800 text-purple-400' : ''}`}><DownloadIcon /> JSON</Button>
                 <div className="relative">
-                  <input type="file" accept=".json" onChange={(e) => { const f = e.target.files?.[0]; if(f) importData(f).then(d => { if(confirm('Заменить текущие данные?')) setTransactions(d); }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+                  <input type="file" accept=".json" onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    importData(f)
+                      .then(d => {
+                        if (confirm('Заменить текущие данные?')) setTransactions(d);
+                      })
+                      .catch(() => {
+                        alert('Не удалось загрузить JSON: проверьте формат файла.');
+                      });
+                  }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
                   <Button variant="outline" className={`text-xs text-purple-600 border-purple-200 ${darkMode ? 'bg-purple-900/20 border-purple-800 text-purple-400' : ''}`}><UploadIcon /> JSON</Button>
                 </div>
               </div>
 
-              <div className="flex gap-2 border-l pl-4 border-gray-400/30">
+              <div className="flex gap-2 border-l pl-3 border-gray-400/30">
                 <Button onClick={() => exportToExcel(transactions)} variant="outline" className={`text-xs text-green-600 border-green-200 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><ExcelIcon /> Excel Скачать</Button>
                 <div className="relative">
-                  <input type="file" accept=".xlsx" onChange={(e) => { const f = e.target.files?.[0]; if(f) importFromExcel(f).then(d => { if(confirm('Заменить текущие данные?')) setTransactions(d); }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+                  <input type="file" accept=".xlsx" onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    importFromExcel(f)
+                      .then(d => {
+                        if (confirm('Заменить текущие данные?')) setTransactions(d);
+                      })
+                      .catch(() => {
+                        alert('Не удалось загрузить Excel: проверьте структуру файла.');
+                      });
+                  }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
                   <Button variant="outline" className={`text-xs text-green-600 border-green-200 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><UploadIcon /> Excel Загрузить</Button>
                 </div>
               </div>
 
-              <div className="ml-auto">
+              <div className="flex items-center gap-2 border-l pl-3 border-gray-400/30">
+                <Button onClick={handleLoadPresetData} variant="outline" className={`text-xs text-amber-600 border-amber-200 ${darkMode ? 'bg-amber-900/20 border-amber-800 text-amber-300' : ''}`}>
+                  Загрузить демо-данные
+                </Button>
+                <span className={`text-[11px] max-w-52 leading-tight ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Готовый пресет для проверки графиков и фильтров без бэкенда.
+                </span>
+              </div>
+
+              <div className="ml-auto w-full sm:w-auto">
                  <button onClick={() => setShowClearMenu(!showClearMenu)} className="text-xs text-red-500 hover:underline">Очистка данных</button>
               </div>
             </div>
@@ -368,7 +412,7 @@ function App() {
     <div className={`min-h-screen transition-colors duration-300 font-sans ${darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       {headerContent}
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-5xl mx-auto px-4 py-6 pb-20 space-y-6">
         <section ref={formRef} className={`rounded-xl shadow-sm p-5 border transition-colors ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} ${editingId ? (darkMode ? 'border-blue-700' : 'border-blue-200 bg-blue-50/50') : ''}`}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">{editingId ? 'Редактирование' : `Добавить ${appMode === 'income' ? 'Доход' : 'Расход'}`}</h2>
@@ -389,26 +433,38 @@ function App() {
                   value={amount}
                   onKeyDown={handleAmountKeyDown}
                   onChange={(e) => setAmount(e.target.value)}
-                  className={`w-full p-2 pr-6 border rounded-lg focus:ring-2 outline-none shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${darkMode ? `bg-gray-700 border-gray-600 text-white focus:ring-${themeColor}-500` : `bg-white border-gray-300 focus:ring-${themeColor}-200`}`}
+                  className={`w-full h-11 text-base p-2 pr-8 border rounded-lg focus:ring-2 outline-none shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${darkMode ? `bg-gray-700 border-gray-600 text-white focus:ring-${themeColor}-500` : `bg-white border-gray-300 focus:ring-${themeColor}-200`}`}
                   placeholder="0"
                 />
                 
-                <div className={`absolute right-0 top-0 bottom-0 flex flex-col border-l w-6 ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}>
+                <div className={`absolute right-0 top-0 bottom-0 flex flex-col border-l w-8 ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}>
                    <button 
                      type="button" 
                      onClick={() => adjustAmount(100)} 
-                     className={`flex-1 flex items-center justify-center text-[10px] rounded-tr-lg hover:bg-opacity-20 transition-colors ${darkMode ? 'hover:bg-white text-gray-400' : 'hover:bg-black text-gray-500'}`}
+                     className={`flex-1 flex items-center justify-center text-xs rounded-tr-lg hover:bg-opacity-20 transition-colors ${darkMode ? 'hover:bg-white text-gray-400' : 'hover:bg-black text-gray-500'}`}
                    >
                      ▲
                    </button>
                    <button 
                      type="button" 
                      onClick={() => adjustAmount(-100)} 
-                     className={`flex-1 flex items-center justify-center text-[10px] rounded-br-lg border-t hover:bg-opacity-20 transition-colors ${darkMode ? 'border-gray-600 hover:bg-white text-gray-400' : 'border-gray-300 hover:bg-black text-gray-500'}`}
+                     className={`flex-1 flex items-center justify-center text-xs rounded-br-lg border-t hover:bg-opacity-20 transition-colors ${darkMode ? 'border-gray-600 hover:bg-white text-gray-400' : 'border-gray-300 hover:bg-black text-gray-500'}`}
                    >
                      ▼
                    </button>
                 </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-2 md:hidden">
+                {QUICK_AMOUNT_STEPS.map((step) => (
+                  <button
+                    key={step}
+                    type="button"
+                    onClick={() => adjustAmount(step)}
+                    className={`h-9 rounded-md text-xs font-semibold border transition-colors ${darkMode ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-gray-50 border-gray-300 text-gray-700'}`}
+                  >
+                    +{step}
+                  </button>
+                ))}
               </div>
 
             </div>
@@ -434,16 +490,15 @@ function App() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 space-y-4">
-            {/* КАРТОЧКА ИТОГО */}
             <div className={`rounded-xl shadow-md p-6 relative ${appMode === 'income' ? 'bg-gradient-to-br from-green-600 to-green-800' : 'bg-gradient-to-br from-blue-600 to-blue-800'} text-white`}>
               <div className="flex justify-between items-center mb-4 relative" ref={periodMenuRef}>
                  <h3 className="font-medium text-white/90">{appMode === 'income' ? 'Доходы:' : 'Расходы:'}</h3>
                  <button onClick={() => setShowPeriodMenu(!showPeriodMenu)} className="flex items-center gap-1 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-sm transition-colors">{getPeriodLabel()} <ChevronDownIcon /></button>
                  {showPeriodMenu && (
                    <div className={`absolute right-0 top-full mt-2 w-64 rounded-xl shadow-xl border z-30 p-2 ${darkMode ? 'bg-gray-800 border-gray-600 text-gray-200' : 'bg-white border-gray-100 text-gray-800'}`}>
-                     {['currentMonth', 'prevMonth', 'last30days', 'thisYear', 'all'].map(mode => (
-                       <button key={mode} onClick={() => { setPeriodMode(mode as PeriodMode); setShowPeriodMenu(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-sm ${periodMode === mode ? `bg-${themeColor}-600 text-white` : 'hover:bg-opacity-10 hover:bg-gray-500'}`}>
-                         {mode === 'currentMonth' ? 'Текущий месяц' : mode === 'prevMonth' ? 'Прошлый месяц' : mode === 'last30days' ? '30 дней' : mode === 'thisYear' ? 'Этот год' : 'Всё время'}
+                     {PERIOD_OPTIONS.map(({ mode, label }) => (
+                       <button key={mode} onClick={() => { setPeriodMode(mode); setShowPeriodMenu(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-sm ${periodMode === mode ? `bg-${themeColor}-600 text-white` : 'hover:bg-opacity-10 hover:bg-gray-500'}`}>
+                         {label}
                        </button>
                      ))}
                      <div className={`border-t my-1 pt-1 ${darkMode ? 'border-gray-600' : 'border-gray-100'}`}>
@@ -463,7 +518,6 @@ function App() {
               <p className="mt-2 text-sm text-white/80">Записей: {filteredData.length}</p>
             </div>
 
-            {/* ФИЛЬТР КАТЕГОРИЙ */}
             <div className={`rounded-xl shadow-sm border p-4 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
                <div className="flex justify-between items-center mb-3">
                  <h3 className="text-sm font-bold opacity-50 uppercase tracking-wider flex items-center gap-1"><FilterIcon /> Категории</h3>
@@ -501,7 +555,7 @@ function App() {
                     placeholder="Поиск по описанию..." 
                     value={searchQuery}
                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                    className="bg-transparent outline-none text-sm w-32 md:w-48 placeholder-gray-400"
+                    className="bg-transparent outline-none text-sm w-40 md:w-48 placeholder-gray-400"
                   />
                 </div>
                 {(searchQuery || filteredData.length !== transactions.length) && (
@@ -521,9 +575,46 @@ function App() {
                 <option value={-1}>Все</option>
               </select>
             </div>
+            <div className="md:hidden flex items-center gap-2 text-xs">
+              <button onClick={() => handleSort('date')} className={`px-2 py-1 rounded border ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}>
+                Дата
+              </button>
+              <button onClick={() => handleSort('amount')} className={`px-2 py-1 rounded border ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}>
+                Сумма
+              </button>
+            </div>
           </div>
-          
-          <div className="overflow-x-auto">
+
+          <div className="md:hidden p-3 space-y-2">
+            {paginatedData.length === 0 ? (
+              <div className="px-4 py-8 text-center opacity-50">Нет данных</div>
+            ) : (
+              paginatedData.map((t) => (
+                <article key={t.id} className={`rounded-lg border p-3 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50/70'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs opacity-60">{parseDateInput(t.date).toLocaleDateString('ru-RU')}</div>
+                      <div className="font-semibold text-base">{t.amount.toLocaleString('ru-RU')} ₽</div>
+                    </div>
+                    <span className={`inline-flex px-2 py-1 rounded text-[11px] font-semibold ${
+                      appMode === 'income'
+                        ? (darkMode ? 'bg-green-900/50 text-green-200' : 'bg-green-50 text-green-700')
+                        : (darkMode ? 'bg-blue-900/50 text-blue-200' : 'bg-blue-50 text-blue-700')
+                    }`}>
+                      {t.category}
+                    </span>
+                  </div>
+                  <p className="text-sm mt-2 opacity-80 break-words">{t.description || '-'}</p>
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={() => handleEdit(t)} className="h-9 px-3 rounded-md border text-blue-500 text-sm">Изменить</button>
+                    <button onClick={() => handleDelete(t.id)} className="h-9 px-3 rounded-md border text-red-500 text-sm">Удалить</button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className={`font-medium ${darkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-50 text-gray-500'}`}>
                 <tr>
@@ -544,7 +635,7 @@ function App() {
                 ) : (
                   paginatedData.map((t) => (
                     <tr key={t.id} className={`transition-colors group ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} ${editingId === t.id ? (darkMode ? 'bg-blue-900/30' : 'bg-blue-50') : ''}`}>
-                      <td className="px-4 py-3 font-medium opacity-90">{new Date(t.date).toLocaleDateString('ru-RU')}</td>
+                      <td className="px-4 py-3 font-medium opacity-90">{parseDateInput(t.date).toLocaleDateString('ru-RU')}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
                           appMode === 'income'
@@ -570,12 +661,19 @@ function App() {
           </div>
 
           {itemsPerPage !== -1 && totalPages > 1 && (
-            <div className={`p-3 flex justify-center gap-2 border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+            <div className={`hidden md:flex p-3 justify-center gap-2 border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
               <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)} className="px-2 py-1 rounded border disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><FirstPageIcon /></button>
               <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 rounded border disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Назад</button>
               <span className="px-2 py-1 opacity-70">Стр {currentPage} из {totalPages}</span>
               <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 rounded border disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Вперед</button>
               <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)} className="px-2 py-1 rounded border disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><LastPageIcon /></button>
+            </div>
+          )}
+          {itemsPerPage !== -1 && totalPages > 1 && (
+            <div className={`md:hidden p-3 flex justify-between items-center border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="h-9 px-3 rounded border disabled:opacity-30">Назад</button>
+              <span className="text-xs opacity-70">Стр {currentPage} / {totalPages}</span>
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="h-9 px-3 rounded border disabled:opacity-30">Вперед</button>
             </div>
           )}
         </section>

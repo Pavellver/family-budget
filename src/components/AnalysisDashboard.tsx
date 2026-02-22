@@ -4,6 +4,7 @@ import {
   ComposedChart, Area, Line
 } from 'recharts';
 import { Transaction } from '../types';
+import { parseDateInput } from '../utils/date';
 
 interface AnalysisDashboardProps {
   transactions: Transaction[];
@@ -11,29 +12,20 @@ interface AnalysisDashboardProps {
 }
 
 export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactions, darkMode }) => {
-  
-  // 1. ОПРЕДЕЛЕНИЕ ПЕРИОДА (Скользящее окно 12 месяцев)
-  // Исправленная логика: берем последнюю дату и отступаем назад ровно по месяцам
   const { filteredTx, lastDateObj } = useMemo(() => {
     if (transactions.length === 0) return { filteredTx: [], lastDateObj: new Date() };
 
-    // Сортируем
-    const sortedByDate = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sortedByDate = [...transactions].sort((a, b) => parseDateInput(a.date).getTime() - parseDateInput(b.date).getTime());
     const lastTx = sortedByDate[sortedByDate.length - 1];
-    
-    // Берем 1-е число месяца последней транзакции, чтобы не было смещений по дням
-    const end = new Date(lastTx.date);
+
+    const end = parseDateInput(lastTx.date);
     end.setDate(1); 
-    
-    // Начало = Конец минус 11 месяцев
+
     const start = new Date(end);
     start.setMonth(start.getMonth() - 11);
 
-    // В фильтре берем год и месяц
     const filtered = transactions.filter(t => {
-      const d = new Date(t.date);
-      // Сравниваем таймстемпы с учетом месяца
-      // (Проверка: год*12 + месяц)
+      const d = parseDateInput(t.date);
       const tVal = d.getFullYear() * 12 + d.getMonth();
       const sVal = start.getFullYear() * 12 + start.getMonth();
       const eVal = end.getFullYear() * 12 + end.getMonth();
@@ -43,27 +35,22 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
     return { filteredTx: filtered, lastDateObj: end };
   }, [transactions]);
 
-  // 2. ДАННЫЕ ДЛЯ ГРАФИКОВ
   const { monthlyData, trendData } = useMemo(() => {
     if (filteredTx.length === 0) return { monthlyData: [], trendData: [] };
 
     const map = new Map<string, { date: string, income: number, expense: number, net: number, balance: 0 }>();
-    
-    // Инициализируем 12 месяцев строго по циклу
-    // Start date for loop
+
     const loopDate = new Date(lastDateObj);
     loopDate.setMonth(loopDate.getMonth() - 11);
 
     for (let i = 0; i < 12; i++) {
         const key = `${loopDate.getFullYear()}-${String(loopDate.getMonth() + 1).padStart(2, '0')}`;
         map.set(key, { date: key, income: 0, expense: 0, net: 0, balance: 0 });
-        // Increment month safely
         loopDate.setMonth(loopDate.getMonth() + 1);
     }
 
-    // Заполняем фактом
     filteredTx.forEach(t => {
-      const d = new Date(t.date);
+      const d = parseDateInput(t.date);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (map.has(key)) {
         const entry = map.get(key)!;
@@ -75,7 +62,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
 
     const sorted = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     
-    // Накопленный баланс
     let runningBalance = 0;
     const historyData = sorted.map(item => {
         runningBalance += item.net;
@@ -84,7 +70,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
         return { ...item, name: monthName, balance: runningBalance };
     });
 
-    // --- ПРОГНОЗ ---
     const totalNet = historyData.reduce((sum, m) => sum + m.net, 0);
     const monthsCount = historyData.length || 1;
     const avgMonthlyNet = totalNet / monthsCount;
@@ -92,7 +77,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
     const forecastData = [];
     let forecastBalance = runningBalance; 
     
-    // Стык
     if (historyData.length > 0) {
         forecastData.push({
             name: historyData[historyData.length - 1].name,
@@ -101,7 +85,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
         });
     }
 
-    // +6 месяцев
     for (let i = 1; i <= 6; i++) {
         forecastBalance += avgMonthlyNet;
         forecastData.push({
@@ -114,7 +97,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
     return { monthlyData: historyData, trendData: forecastData };
   }, [filteredTx, lastDateObj]);
 
-  // 3. KPI
   const kpi = useMemo(() => {
     const totalIncome = filteredTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const totalExpense = filteredTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
@@ -155,7 +137,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
-      {/* KPI 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard title="Баланс" value={kpi.balance} color={kpi.balance >= 0 ? 'text-green-500' : 'text-red-500'} darkMode={darkMode} />
         <KpiCard title="Сальдо доходы/расходы" value={`${kpi.savingsRate}%`} sub="от доходов" darkMode={darkMode} />
@@ -163,7 +144,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
         <KpiCard title="Суммарный оборот" value={formatCurrency(kpi.turnover)} sub="доходы + расходы" color="text-blue-500" darkMode={darkMode} />
       </div>
 
-      {/* KPI 2 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard title="Топ расход (Категория)" value={kpi.topExpenseName} sub={formatCurrency(kpi.topExpenseVal)} color="text-red-400" darkMode={darkMode} />
         <KpiCard title="Топ доход (Источник)" value={kpi.topIncomeName} sub={formatCurrency(kpi.topIncomeVal)} color="text-green-400" darkMode={darkMode} />
@@ -171,7 +151,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
         <KpiCard title="Прогноз через полгода" value={trendData.length > 0 ? formatCurrency(trendData[trendData.length-1].forecast) : '-'} sub="при текущем тренде" color="text-purple-500" darkMode={darkMode} />
       </div>
 
-      {/* ГРАФИК 1 */}
       <div className={`p-5 rounded-xl border shadow-sm ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
         <h3 className="text-lg font-semibold mb-4">Динамика за 12 месяцев</h3>
         <div className="h-[300px] w-full">
@@ -189,7 +168,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
         </div>
       </div>
 
-      {/* ГРАФИК 2 */}
       <div className={`p-5 rounded-xl border shadow-sm ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
         <h3 className="text-lg font-semibold mb-2">Тренд накоплений</h3>
         <p className="text-xs opacity-50 mb-4">Пунктирная линия — прогноз на 6 месяцев, если динамика сохранится.</p>
@@ -217,7 +195,15 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ transactio
   );
 };
 
-const KpiCard = ({ title, value, sub, color, darkMode }: any) => (
+interface KpiCardProps {
+  title: string;
+  value: number | string;
+  sub?: string;
+  color?: string;
+  darkMode: boolean;
+}
+
+const KpiCard: React.FC<KpiCardProps> = ({ title, value, sub, color, darkMode }) => (
   <div className={`p-4 rounded-xl border shadow-sm ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
     <div className="text-xs opacity-60 font-medium uppercase tracking-wider truncate">{title}</div>
     <div className={`text-xl md:text-2xl font-bold mt-1 truncate ${color || (darkMode ? 'text-white' : 'text-gray-900')}`}>

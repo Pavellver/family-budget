@@ -1,9 +1,8 @@
 import { Transaction } from '../types';
 import * as XLSX from 'xlsx';
+import { getTodayDateInput, toDateInputValue } from '../utils/date';
 
 const STORAGE_KEY = 'budget_transactions';
-
-// --- СОХРАНЕНИЕ И ЗАГРУЗКА ---
 
 export const saveTransactions = (transactions: Transaction[]) => {
   try {
@@ -20,9 +19,9 @@ export const loadTransactions = (): Transaction[] => {
     
     const parsed = JSON.parse(data);
     
-    // Миграция старых данных (если вдруг нет типа)
     return parsed.map((t: any) => ({
       ...t,
+      date: normalizeImportedDate(t.date),
       type: t.type || 'expense' 
     }));
   } catch (error) {
@@ -30,8 +29,6 @@ export const loadTransactions = (): Transaction[] => {
     return [];
   }
 };
-
-// --- ФУНКЦИИ ОЧИСТКИ (НОВОЕ) ---
 
 export const clearData = (mode: 'all' | 'income' | 'expenses') => {
   if (mode === 'all') {
@@ -43,10 +40,8 @@ export const clearData = (mode: 'all' | 'income' | 'expenses') => {
   let filtered: Transaction[] = [];
 
   if (mode === 'income') {
-    // Удаляем доходы -> оставляем только расходы
     filtered = current.filter(t => t.type === 'expense');
   } else if (mode === 'expenses') {
-    // Удаляем расходы -> оставляем только доходы
     filtered = current.filter(t => t.type === 'income');
   }
 
@@ -54,10 +49,7 @@ export const clearData = (mode: 'all' | 'income' | 'expenses') => {
   return filtered;
 };
 
-// --- ЭКСПОРТ/ИМПОРТ JSON ---
-
 export const exportData = (transactions: Transaction[], version: string) => {
-  // Создаем расширенный объект бэкапа с метаданными
   const backup = {
     version: version,
     createdAt: new Date().toISOString(),
@@ -70,11 +62,11 @@ export const exportData = (transactions: Transaction[], version: string) => {
   
   const link = document.createElement('a');
   link.href = url;
-  // Имя файла содержит версию и дату
-  link.download = `budget_backup_v${version}_${new Date().toISOString().split('T')[0]}.json`;
+  link.download = `budget_backup_v${version}_${getTodayDateInput()}.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
 export const importData = (file: File): Promise<Transaction[]> => {
@@ -86,7 +78,6 @@ export const importData = (file: File): Promise<Transaction[]> => {
         
         let dataToImport: any[] = [];
 
-        // Проверка: это новый формат (с полем transactions) или старый (просто массив)?
         if (result.transactions && Array.isArray(result.transactions)) {
           dataToImport = result.transactions;
         } else if (Array.isArray(result)) {
@@ -95,9 +86,9 @@ export const importData = (file: File): Promise<Transaction[]> => {
           throw new Error("Неверный формат файла");
         }
 
-        // Чистка и валидация
         const cleanData = dataToImport.map((t: any) => ({
           ...t,
+          date: normalizeImportedDate(t.date),
           type: t.type || 'expense'
         }));
         
@@ -109,8 +100,6 @@ export const importData = (file: File): Promise<Transaction[]> => {
     reader.readAsText(file);
   });
 };
-
-// --- EXCEL ---
 
 export const exportToExcel = (transactions: Transaction[]) => {
   const dataToExport = transactions.map(t => ({
@@ -126,7 +115,33 @@ export const exportToExcel = (transactions: Transaction[]) => {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Бюджет");
   worksheet['!cols'] = [{wch: 10}, {wch: 12}, {wch: 20}, {wch: 10}, {wch: 30}, {wch: 25}];
-  XLSX.writeFile(workbook, `budget_excel_${new Date().toISOString().split('T')[0]}.xlsx`);
+  XLSX.writeFile(workbook, `budget_excel_${getTodayDateInput()}.xlsx`);
+};
+
+const normalizeImportedDate = (rawDate: unknown): string => {
+  if (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    return rawDate;
+  }
+
+  if (rawDate instanceof Date && !Number.isNaN(rawDate.getTime())) {
+    return toDateInputValue(rawDate);
+  }
+
+  if (typeof rawDate === 'number') {
+    const parsed = XLSX.SSF.parse_date_code(rawDate);
+    if (parsed) {
+      return toDateInputValue(new Date(parsed.y, parsed.m - 1, parsed.d));
+    }
+  }
+
+  if (typeof rawDate === 'string') {
+    const parsed = new Date(rawDate);
+    if (!Number.isNaN(parsed.getTime())) {
+      return toDateInputValue(parsed);
+    }
+  }
+
+  return getTodayDateInput();
 };
 
 export const importFromExcel = (file: File): Promise<Transaction[]> => {
@@ -142,7 +157,7 @@ export const importFromExcel = (file: File): Promise<Transaction[]> => {
 
         const parsedTransactions: Transaction[] = jsonData.map((row: any) => ({
           id: row['ID (Не трогать)'] || crypto.randomUUID(),
-          date: row['Дата'] || new Date().toISOString().split('T')[0],
+          date: normalizeImportedDate(row['Дата']),
           amount: Number(row['Сумма']) || 0,
           category: row['Категория'] || 'Другое',
           description: row['Описание'] || '',
