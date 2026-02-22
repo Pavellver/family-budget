@@ -7,6 +7,7 @@ import { AnalysisDashboard } from './components/AnalysisDashboard';
 import { CategorySelect } from './components/ui/CategorySelect';
 import { createPresetTransactions } from './data/presetTransactions';
 import { getCurrentMonthDateRange, getPreviousMonthDateRange, getTodayDateInput, parseDateInput, shiftDays, toDateInputValue } from './utils/date';
+import { mergeTransactions } from './utils/transactions';
 
 const APP_VERSION = '0.1.0';
 
@@ -300,6 +301,16 @@ function App() {
     setDate(getTodayDateInput());
   };
 
+  const importWithMode = (incoming: Transaction[]) => {
+    if (confirm('Заменить текущие данные импортом?')) {
+      setTransactions(incoming);
+      return;
+    }
+    if (confirm('Дополнить текущие данные импортом (без удаления существующих)?')) {
+      setTransactions((prev) => mergeTransactions(prev, incoming));
+    }
+  };
+
   const headerContent = (
     <header className={`sticky top-0 z-20 shadow-sm transition-colors duration-300 ${darkMode ? 'bg-gray-800 border-b border-gray-700' : 'bg-white'}`}>
       <div className="max-w-5xl mx-auto px-4 py-4 flex flex-wrap gap-3 justify-between items-center">
@@ -333,7 +344,7 @@ function App() {
                     if (!f) return;
                     importData(f)
                       .then(d => {
-                        if (confirm('Заменить текущие данные?')) setTransactions(d);
+                        importWithMode(d);
                       })
                       .catch(() => {
                         alert('Не удалось загрузить JSON: проверьте формат файла.');
@@ -351,7 +362,7 @@ function App() {
                     if (!f) return;
                     importFromExcel(f)
                       .then(d => {
-                        if (confirm('Заменить текущие данные?')) setTransactions(d);
+                        importWithMode(d);
                       })
                       .catch(() => {
                         alert('Не удалось загрузить Excel: проверьте структуру файла.');
@@ -362,11 +373,15 @@ function App() {
               </div>
 
               <div className="flex items-center gap-2 border-l pl-3 border-gray-400/30">
-                <Button onClick={handleLoadPresetData} variant="outline" className={`text-xs text-amber-600 border-amber-200 ${darkMode ? 'bg-amber-900/20 border-amber-800 text-amber-300' : ''}`}>
+                <Button
+                  onClick={handleLoadPresetData}
+                  variant="primary"
+                  className={`text-xs font-semibold ${darkMode ? 'bg-amber-400 hover:bg-amber-300 text-gray-900' : 'bg-amber-500 hover:bg-amber-600 text-white'}`}
+                >
                   Загрузить демо-данные
                 </Button>
                 <span className={`text-[11px] max-w-52 leading-tight ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Готовый пресет для проверки графиков и фильтров без бэкенда.
+                  Годовой пресет: есть месяцы с минусом, но в целом доходы выше расходов.
                 </span>
               </div>
 
@@ -383,6 +398,18 @@ function App() {
                 <Button onClick={() => handleClearData('all')} variant="danger" className="text-xs px-2 py-1 h-8 bg-red-700 hover:bg-red-800"><Trash2Icon /> Удалить ВСЁ</Button>
               </div>
             )}
+
+            <div className={`p-3 rounded border ${darkMode ? 'border-gray-700 bg-gray-900/40' : 'border-gray-200 bg-white/80'}`}>
+              <h4 className={`text-sm font-semibold mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Помощь</h4>
+              <ul className={`text-xs leading-5 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                <li>Режимы: Расходы, Доходы и Анализ с KPI и прогнозом на 6 месяцев.</li>
+                <li>Фильтры: период, категории, поиск по описанию, сортировка и пагинация.</li>
+                <li>Данные: экспорт/импорт JSON и Excel, при импорте можно заменить или дополнить текущие записи.</li>
+                <li>Для быстрого старта есть годовой демо-пресет.</li>
+                <li>Темы: светлая и тёмная, переключаются в шапке.</li>
+                <li>Хранение: все записи лежат локально в браузере (без сервера).</li>
+              </ul>
+            </div>
             
             <div className="text-xs opacity-50 text-right">Всего записей: {transactions.length} | v{APP_VERSION}</div>
           </div>
