@@ -355,7 +355,7 @@ function App() {
               </div>
 
               <div className="flex gap-2 border-l pl-3 border-gray-400/30">
-                <Button onClick={() => exportToExcel(transactions)} variant="outline" className={`text-xs text-green-600 border-green-200 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><ExcelIcon /> Excel Скачать</Button>
+                <Button onClick={() => exportToExcel(transactions)} variant="outline" className={`text-xs font-semibold text-green-700 border-green-300 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><ExcelIcon /> Excel Скачать</Button>
                 <div className="relative">
                   <input type="file" accept=".xlsx" onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -368,7 +368,7 @@ function App() {
                         alert('Не удалось загрузить Excel: проверьте структуру файла.');
                       });
                   }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
-                  <Button variant="outline" className={`text-xs text-green-600 border-green-200 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><UploadIcon /> Excel Загрузить</Button>
+                  <Button variant="outline" className={`text-xs font-semibold text-green-700 border-green-300 ${darkMode ? 'bg-green-900/20 border-green-800 text-green-400' : ''}`}><UploadIcon /> Excel Загрузить</Button>
                 </div>
               </div>
 
