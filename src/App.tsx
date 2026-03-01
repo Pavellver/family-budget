@@ -602,24 +602,40 @@ function App() {
               <div className="px-4 py-8 text-center opacity-50">Нет данных</div>
             ) : (
               paginatedData.map((t) => (
-                <article key={t.id} className={`rounded-lg border p-3 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50/70'}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-xs opacity-60">{parseDateInput(t.date).toLocaleDateString('ru-RU')}</div>
-                      <div className="font-semibold text-base">{t.amount.toLocaleString('ru-RU')} ₽</div>
+                <article key={t.id} className={`rounded-lg border px-2.5 py-2 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50/70'}`}>
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[10px] opacity-60 whitespace-nowrap">{parseDateInput(t.date).toLocaleDateString('ru-RU')}</span>
+                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${
+                          appMode === 'income'
+                            ? (darkMode ? 'bg-green-900/50 text-green-200' : 'bg-green-50 text-green-700')
+                            : (darkMode ? 'bg-blue-900/50 text-blue-200' : 'bg-blue-50 text-blue-700')
+                        }`}>
+                          {t.category}
+                        </span>
+                        <span className="truncate text-xs opacity-80">{t.description || '-'}</span>
+                      </div>
                     </div>
-                    <span className={`inline-flex px-2 py-1 rounded text-[11px] font-semibold ${
-                      appMode === 'income'
-                        ? (darkMode ? 'bg-green-900/50 text-green-200' : 'bg-green-50 text-green-700')
-                        : (darkMode ? 'bg-blue-900/50 text-blue-200' : 'bg-blue-50 text-blue-700')
-                    }`}>
-                      {t.category}
-                    </span>
-                  </div>
-                  <p className="text-sm mt-2 opacity-80 break-words">{t.description || '-'}</p>
-                  <div className="mt-3 flex gap-2">
-                    <button onClick={() => handleEdit(t)} className="h-9 px-3 rounded-md border text-blue-500 text-sm">Изменить</button>
-                    <button onClick={() => handleDelete(t.id)} className="h-9 px-3 rounded-md border text-red-500 text-sm">Удалить</button>
+                    <div className="font-semibold text-sm whitespace-nowrap">{t.amount.toLocaleString('ru-RU')} ₽</div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleEdit(t)}
+                        aria-label="Редактировать запись"
+                        title="Редактировать"
+                        className={`h-9 w-9 rounded-md border flex items-center justify-center text-blue-500 ${darkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white'}`}
+                      >
+                        <EditIcon />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(t.id)}
+                        aria-label="Удалить запись"
+                        title="Удалить"
+                        className={`h-9 w-9 rounded-md border flex items-center justify-center text-red-500 ${darkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white'}`}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))
