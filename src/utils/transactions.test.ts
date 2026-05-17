@@ -8,6 +8,8 @@ const tx = (id: string): Transaction => ({
   amount: 1000,
   category: 'Продукты',
   description: '',
+  store: '',
+  paymentMethod: '',
   type: 'expense',
   createdAt: 1,
 });

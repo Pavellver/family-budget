@@ -20,16 +20,16 @@ export const createPresetTransactions = (): Transaction[] => {
     const income = monthlyIncomes[i];
 
     const expenseParts = [
-      { day: 4, amount: Math.round(expense * 0.27), category: 'Продукты', description: 'Продукты и бытовые покупки' },
-      { day: 10, amount: Math.round(expense * 0.18), category: 'Коммуналка', description: 'ЖКУ и обязательные платежи' },
-      { day: 17, amount: Math.round(expense * 0.15), category: 'Транспорт', description: 'Транспорт и авто' },
-      { day: 25, amount: expense - Math.round(expense * 0.27) - Math.round(expense * 0.18) - Math.round(expense * 0.15), category: 'Развлечения и хобби', description: 'Досуг и прочие траты' },
+      { day: 4, amount: Math.round(expense * 0.27), category: 'Продукты', description: 'Продукты и бытовые покупки', store: 'Лента', paymentMethod: 'ВТБ' },
+      { day: 10, amount: Math.round(expense * 0.18), category: 'Коммуналка', description: 'ЖКУ и обязательные платежи', store: 'Госуслуги', paymentMethod: 'ВТБ' },
+      { day: 17, amount: Math.round(expense * 0.15), category: 'Транспорт', description: 'Транспорт и авто', store: 'АЗС', paymentMethod: 'Т' },
+      { day: 25, amount: expense - Math.round(expense * 0.27) - Math.round(expense * 0.18) - Math.round(expense * 0.15), category: 'Развлечения и хобби', description: 'Досуг и прочие траты', store: 'Озон', paymentMethod: 'Озон' },
     ];
 
     const incomeParts = [
-      { day: 1, amount: Math.round(income * 0.72), category: 'Зарплата', description: 'Основной доход' },
-      { day: 14, amount: Math.round(income * 0.18), category: 'Подработка', description: 'Дополнительный доход' },
-      { day: 28, amount: income - Math.round(income * 0.72) - Math.round(income * 0.18), category: 'Кэшбэк', description: 'Кэшбэк и возвраты' },
+      { day: 1, amount: Math.round(income * 0.72), category: 'Зарплата', description: 'Основной доход', store: 'Работодатель', paymentMethod: 'ВТБ' },
+      { day: 14, amount: Math.round(income * 0.18), category: 'Подработка', description: 'Дополнительный доход', store: 'Клиент', paymentMethod: 'Т' },
+      { day: 28, amount: income - Math.round(income * 0.72) - Math.round(income * 0.18), category: 'Кэшбэк', description: 'Кэшбэк и возвраты', store: 'Банк', paymentMethod: 'Озон' },
     ];
 
     incomeParts.forEach((item, idx) => {
@@ -39,6 +39,8 @@ export const createPresetTransactions = (): Transaction[] => {
         amount: item.amount,
         category: item.category,
         description: item.description,
+        store: item.store,
+        paymentMethod: item.paymentMethod,
         type: 'income',
         createdAt: Date.now() - (400 - i * 10 - idx),
       });
@@ -51,6 +53,8 @@ export const createPresetTransactions = (): Transaction[] => {
         amount: item.amount,
         category: item.category,
         description: item.description,
+        store: item.store,
+        paymentMethod: item.paymentMethod,
         type: 'expense',
         createdAt: Date.now() - (350 - i * 10 - idx),
       });

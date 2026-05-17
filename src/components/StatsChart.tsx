@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   AreaChart, Area, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
-import { Transaction, getGroupByCategory } from '../types';
+import { CategoryGroups, Transaction, getGroupByCategory } from '../types';
 import { parseDateInput } from '../utils/date';
 
 export type ChartType = 'pie' | 'bar' | 'area' | 'radar';
@@ -12,25 +12,26 @@ type GroupByOption = 'category' | 'group';
 
 interface StatsChartProps {
   transactions: Transaction[];
+  categoryGroups: CategoryGroups;
   darkMode: boolean;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57', '#ff6b6b'];
 
-export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }) => {
+export const StatsChart: React.FC<StatsChartProps> = ({ transactions, categoryGroups, darkMode }) => {
   const [type, setType] = useState<ChartType>('pie');
   const [groupBy, setGroupBy] = useState<GroupByOption>('category');
 
   const chartData = useMemo(() => {
     const map = new Map<string, number>();
     transactions.forEach(t => {
-      const key = groupBy === 'category' ? t.category : getGroupByCategory(t.category);
+      const key = groupBy === 'category' ? t.category : getGroupByCategory(t.category, categoryGroups);
       map.set(key, (map.get(key) || 0) + t.amount);
     });
     return Array.from(map.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [transactions, groupBy]);
+  }, [transactions, groupBy, categoryGroups]);
 
   const { timeData, dataKeys } = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
@@ -40,7 +41,7 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }
 
     sortedTransactions.forEach(t => {
       const dateStr = parseDateInput(t.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-      const key = groupBy === 'category' ? t.category : getGroupByCategory(t.category);
+      const key = groupBy === 'category' ? t.category : getGroupByCategory(t.category, categoryGroups);
       
       allKeys.add(key);
 
@@ -61,7 +62,7 @@ export const StatsChart: React.FC<StatsChartProps> = ({ transactions, darkMode }
     });
 
     return { timeData: normalizedData, dataKeys: keysArray };
-  }, [transactions, groupBy]);
+  }, [transactions, groupBy, categoryGroups]);
 
   if (transactions.length === 0) {
     return (

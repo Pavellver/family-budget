@@ -1,4 +1,10 @@
 export type TransactionType = 'expense' | 'income';
+export type CategoryGroups = Record<string, string[]>;
+
+export interface CategorySettings {
+  expenseGroups: CategoryGroups;
+  incomeGroups: CategoryGroups;
+}
 
 export interface Transaction {
   id: string;
@@ -6,17 +12,19 @@ export interface Transaction {
   amount: number;
   category: string;
   description: string;
+  store: string;
+  paymentMethod: string;
   createdAt: number;
   type: TransactionType;
 }
 
-export const EXPENSE_GROUPS = {
+export const EXPENSE_GROUPS: CategoryGroups = {
   "Фикс": [
     "Коммуналка", "ЭЭ", "Вода", "Газ",
     "Гараж", "Телефон", "Интернет"
   ],
   "Автомобиль": [
-    "Ремонт", "Страховка", "Заправка", "Обслуживание"
+    "Ремонт", "Страховка", "Заправка", "Обслуживание", "Запчасти"
   ],
   "Еда": [
     "Еда вне дома", "Продукты", "Сладости", "Кафе и рестораны"
@@ -27,9 +35,9 @@ export const EXPENSE_GROUPS = {
     "Домашние животные", "Подарки", 
     "Путешествия и поездки", "Прочее"
   ]
-} as const;
+};
 
-export const INCOME_GROUPS = {
+export const INCOME_GROUPS: CategoryGroups = {
   "Активный": [
     "Зарплата", "Аванс", "Бонус", "Премия", "Подработка"
   ],
@@ -39,17 +47,21 @@ export const INCOME_GROUPS = {
   "Прочее": [
     "Подарки", "Продажа вещей", "Возврат долга", "Другое"
   ]
-} as const;
+};
 
-export const ALL_EXPENSE_CATS = Object.values(EXPENSE_GROUPS).flat();
-export const ALL_INCOME_CATS = Object.values(INCOME_GROUPS).flat();
+export const getAllCategories = (groups: CategoryGroups): string[] => Object.values(groups).flat();
 
-export const getGroupByCategory = (cat: string): string => {
-  for (const [group, items] of Object.entries(EXPENSE_GROUPS)) {
-    if ((items as readonly string[]).includes(cat)) return group;
+export const ALL_EXPENSE_CATS = getAllCategories(EXPENSE_GROUPS);
+export const ALL_INCOME_CATS = getAllCategories(INCOME_GROUPS);
+
+export const getGroupByCategory = (cat: string, groups?: CategoryGroups): string => {
+  const groupSets = groups ? [groups] : [EXPENSE_GROUPS, INCOME_GROUPS];
+
+  for (const groupSet of groupSets) {
+    for (const [group, items] of Object.entries(groupSet)) {
+      if (items.includes(cat)) return group;
+    }
   }
-  for (const [group, items] of Object.entries(INCOME_GROUPS)) {
-    if ((items as readonly string[]).includes(cat)) return group;
-  }
+
   return "Разное";
 };

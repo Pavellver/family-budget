@@ -8,6 +8,7 @@ describe('preset transactions', () => {
     expect(preset.length).toBe(84);
     expect(preset.some((t) => t.type === 'income')).toBe(true);
     expect(preset.some((t) => t.type === 'expense')).toBe(true);
+    expect(preset.every((t) => typeof t.store === 'string' && typeof t.paymentMethod === 'string')).toBe(true);
   });
 
   it('keeps annual income 10-15% above annual expenses with deficit months present', () => {

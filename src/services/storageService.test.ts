@@ -1,5 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { clearData, loadTransactions, saveTransactions } from './storageService';
+import {
+  DEFAULT_PAYMENT_METHODS,
+  loadCategorySettings,
+  clearData,
+  loadPaymentMethods,
+  loadTransactions,
+  normalizeCategorySettings,
+  normalizePaymentMethods,
+  saveCategorySettings,
+  savePaymentMethods,
+  saveTransactions,
+} from './storageService';
 import { Transaction } from '../types';
 
 type StorageMap = Record<string, string>;
@@ -26,6 +37,8 @@ const tx = (overrides: Partial<Transaction>): Transaction => ({
   amount: 1000,
   category: 'Продукты',
   description: 'test',
+  store: '',
+  paymentMethod: '',
   type: 'expense',
   createdAt: 1,
   ...overrides,
@@ -67,6 +80,8 @@ describe('storageService', () => {
     expect(loaded).toHaveLength(1);
     expect(loaded[0].type).toBe('expense');
     expect(loaded[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(loaded[0].store).toBe('');
+    expect(loaded[0].paymentMethod).toBe('');
   });
 
   it('clearData("income") removes only income transactions', () => {
@@ -86,5 +101,48 @@ describe('storageService', () => {
     const result = clearData('all');
     expect(result).toHaveLength(0);
     expect(loadTransactions()).toHaveLength(0);
+  });
+
+  it('stores custom payment methods per browser', () => {
+    savePaymentMethods(['ВТБ', 'Сбер', 'сбер', '', 'нал']);
+
+    expect(loadPaymentMethods()).toEqual(['ВТБ', 'Сбер', 'нал']);
+  });
+
+  it('falls back to default payment methods when customization is empty', () => {
+    expect(normalizePaymentMethods([])).toEqual(DEFAULT_PAYMENT_METHODS);
+  });
+
+  it('stores custom category settings separately from transactions', () => {
+    saveCategorySettings({
+      expenseGroups: {
+        Автомобиль: ['Заправка', 'Запчасти'],
+        Дом: ['Ремонт'],
+      },
+      incomeGroups: {
+        Работа: ['Зарплата'],
+      },
+    });
+    saveTransactions([tx({ id: 'any' })]);
+    clearData('all');
+
+    const settings = loadCategorySettings();
+    expect(loadTransactions()).toHaveLength(0);
+    expect(settings.expenseGroups.Автомобиль).toEqual(['Заправка', 'Запчасти']);
+    expect(settings.incomeGroups.Работа).toEqual(['Зарплата']);
+  });
+
+  it('normalizes invalid category settings back to defaults', () => {
+    const settings = normalizeCategorySettings({
+      expenseGroups: {
+        '': [''],
+      },
+      incomeGroups: {
+        Активный: ['Зарплата', 'Зарплата', ''],
+      },
+    });
+
+    expect(settings.expenseGroups.Автомобиль).toContain('Запчасти');
+    expect(settings.incomeGroups.Активный).toEqual(['Зарплата']);
   });
 });
